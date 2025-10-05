@@ -111,7 +111,7 @@
                         <option value="Santa Rita">Santa Rita</option>
                         <option value="Quince de noviembre">Quince de noviembre</option>
                         <option value="Estadio">Estadio</option>
-                        <option value="Club de Leonel">Club de Leonel</option>
+                        <option value="Club de Leones">Club de Leones</option>
                     </select>
                 </div>
 
@@ -262,7 +262,7 @@
                 if (!data.reportType) requiredFields.push('Tipo de Reporte');
 
                 const message = 'Por favor, completa los campos obligatorios: ' + requiredFields.join(', ');
-                displayMessageModal('Atención', message, 'bg-red-500');
+                displayMessageModal('Atención', '<p>' + message + '</p>', 'bg-red-500');
                 return null; 
             }
 
@@ -274,23 +274,25 @@
             document.getElementById('dataSheetForm').reset();
         }
 
-        // Función para mostrar un mensaje (reemplazando alert())
-        function displayMessageModal(title, message, bgColor) {
+        // Función para mostrar un mensaje/detalles (reemplazando alert())
+        function displayMessageModal(title, contentHTML, bgColor) {
             let modal = document.getElementById('customModal');
             if (!modal) {
                 modal = document.createElement('div');
                 modal.id = 'customModal';
+                // Añadir clases para ocultar y centrar
                 modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300 opacity-0 pointer-events-none';
                 document.body.appendChild(modal);
             }
 
+            // El modal ahora usa contentHTML para el cuerpo
             modal.innerHTML = `
-                <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 transform transition-all duration-300 scale-90">
-                    <div class="flex items-center space-x-4 mb-4">
-                        <div class="p-2 rounded-full ${bgColor}"></div>
-                        <h3 class="text-lg font-bold text-gray-800">${title}</h3>
+                <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 transform transition-all duration-300 scale-90">
+                    <div class="flex items-center space-x-4 mb-4 border-b pb-2">
+                        <h3 class="text-xl font-bold text-gray-800">${title}</h3>
                     </div>
-                    <p class="text-gray-600 mb-6">${message}</p>
+                    <!-- Contenido del modal (puede ser texto simple o HTML estructurado) -->
+                    <div class="text-gray-600 mb-6 max-h-96 overflow-y-auto">${contentHTML}</div>
                     <button onclick="closeModal()" class="w-full ${bgColor.replace('bg-', 'hover:bg-')} ${bgColor} text-white font-semibold py-2 rounded-lg">Cerrar</button>
                 </div>
             `;
@@ -308,7 +310,7 @@
                 modal.querySelector('div').classList.add('scale-90');
                 modal.classList.add('opacity-0', 'pointer-events-none');
                 setTimeout(() => {
-                    // Opcional: remover el modal del DOM para limpieza
+                    // Limpieza opcional
                 }, 300);
             }
         }
@@ -322,8 +324,52 @@
                 saveRecords();
                 clearForm();
                 renderRecords();
-                displayMessageModal('Guardado Exitoso', 'El registro del observador se ha guardado correctamente.', 'bg-green-500');
+                displayMessageModal('Guardado Exitoso', '<p>El registro del observador se ha guardado correctamente.</p>', 'bg-green-500');
             }
+        }
+
+        // --- Función para Ver Detalles del Registro ---
+
+        function viewRecord(id) {
+            const record = savedRecords.find(r => r.id === id);
+            if (!record) {
+                displayMessageModal('Error', '<p>Registro no encontrado.</p>', 'bg-red-500');
+                return;
+            }
+
+            // Convertir el objeto de registro en contenido HTML estructurado
+            const detailsHTML = `
+                <div class="space-y-4 text-left">
+                    <p class="text-sm"><strong>Fecha de Registro:</strong> <span class="text-gray-700">${record.recordDate || '-'}</span></p>
+                    <p class="text-sm">
+                        <strong>Tipo de Reporte:</strong> 
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${record.reportType === 'Positivo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                            ${record.reportType || '-'}
+                        </span>
+                    </p>
+
+                    <h4 class="text-lg font-bold text-green-700 border-t pt-2 mt-4">Estudiante: ${record.studentName || '-'}</h4>
+                    <div class="grid grid-cols-2 gap-y-2 text-sm text-gray-700">
+                        <p><strong>Grado:</strong> ${record.studentGrade || '-'}</p>
+                        <p><strong>Grupo:</strong> ${record.studentGroup || '-'}</p>
+                        <p><strong>Sede:</strong> ${record.studentCampus || '-'}</p>
+                        <p><strong>Jornada:</strong> ${record.studentShift || '-'}</p>
+                    </div>
+
+                    <h4 class="font-bold text-gray-800 border-t pt-3 mt-4">Descripción del Hecho</h4>
+                    <div class="bg-gray-100 p-3 rounded-lg border text-sm whitespace-pre-wrap">${record.motiveDescription || 'N/A'}</div>
+
+                    <h4 class="font-bold text-gray-800 border-t pt-3 mt-4">Acciones Aplicadas</h4>
+                    <div class="bg-gray-100 p-3 rounded-lg border text-sm whitespace-pre-wrap">${record.mediationActions || 'N/A'}</div>
+                    
+                    <h4 class="font-bold text-gray-800 border-t pt-3 mt-4">Datos del Registrador</h4>
+                    <p class="text-sm"><strong>Rol:</strong> ${record.registeringPersonRole || '-'}</p>
+                    <p class="text-sm"><strong>Nombre:</strong> ${record.registeringPersonName || '-'}</p>
+                    <p class="text-sm"><strong>Acudiente Contactado:</strong> ${record.parentContacted || 'No'}</p>
+                </div>
+            `;
+
+            displayMessageModal('Detalles del Registro', detailsHTML, 'bg-blue-600'); 
         }
 
         // --- Funciones de Renderización ---
@@ -363,7 +409,11 @@
                                     <td class="px-6 py-4 whitespace-nowrap">${reportBadge}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">${gradeGroup}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${reporterName}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                                    <td class="px-6 py-4 whitespace-nowrap text-center space-x-2">
+                                        <button onclick="viewRecord(${record.id})" 
+                                                class="text-blue-600 hover:text-blue-800 font-semibold text-sm transition duration-150 mr-3">
+                                            👁️ Ver Detalles
+                                        </button>
                                         <button onclick="deleteRecord(${record.id})" 
                                                 class="text-gray-400 hover:text-red-500 font-semibold text-sm transition duration-150">
                                             🗑️ Eliminar
@@ -385,7 +435,7 @@
             if (savedRecords.length < initialLength) {
                 saveRecords();
                 renderRecords();
-                displayMessageModal('Registro Eliminado', 'La observación ha sido eliminada del historial.', 'bg-gray-500');
+                displayMessageModal('Registro Eliminado', '<p>La observación ha sido eliminada del historial.</p>', 'bg-gray-500');
             }
         }
 
@@ -394,7 +444,7 @@
 
         function exportToCsv() {
             if (savedRecords.length === 0) {
-                displayMessageModal('No hay Datos', 'No hay registros guardados para exportar.', 'bg-yellow-500');
+                displayMessageModal('No hay Datos', '<p>No hay registros guardados para exportar.</p>', 'bg-yellow-500');
                 return;
             }
 
