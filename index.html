@@ -104,6 +104,18 @@
                     </select>
                 </div>
 
+                <!-- CAMPO NUEVO: PERIODO ACADÉMICO -->
+                <div class="grid-item p-3">
+                    <label for="academicPeriod" class="input-label block">Periodo Académico</label>
+                    <select id="academicPeriod" name="academicPeriod" class="input-field w-full">
+                        <option value="">-- Seleccionar --</option>
+                        <option value="Uno">Uno</option>
+                        <option value="Dos">Dos</option>
+                        <option value="Tres">Tres</option>
+                        <option value="Cuatro">Cuatro</option>
+                    </select>
+                </div>
+
                 <div class="grid-item p-3">
                     <label for="studentCampus" class="input-label block">Sede</label>
                     <select id="studentCampus" name="studentCampus" class="input-field w-full">
@@ -352,6 +364,7 @@
                     <div class="grid grid-cols-2 gap-y-2 text-sm text-gray-700">
                         <p><strong>Grado:</strong> ${record.studentGrade || '-'}</p>
                         <p><strong>Grupo:</strong> ${record.studentGroup || '-'}</p>
+                        <p><strong>Periodo:</strong> ${record.academicPeriod || '-'}</p>
                         <p><strong>Sede:</strong> ${record.studentCampus || '-'}</p>
                         <p><strong>Jornada:</strong> ${record.studentShift || '-'}</p>
                     </div>
@@ -455,6 +468,7 @@
                 'studentName', 
                 'studentGrade', 
                 'studentGroup', 
+                'academicPeriod', // <-- Nuevo campo para exportación
                 'studentCampus', 
                 'studentShift', 
                 'motiveDescription', 
@@ -473,6 +487,7 @@
                     case 'studentName': return 'Estudiante';
                     case 'studentGrade': return 'Grado';
                     case 'studentGroup': return 'Grupo';
+                    case 'academicPeriod': return 'Periodo Académico'; // <-- Nuevo encabezado
                     case 'studentCampus': return 'Sede';
                     case 'studentShift': return 'Jornada';
                     case 'motiveDescription': return 'Motivo/Descripcion';
