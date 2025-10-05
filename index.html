@@ -53,6 +53,12 @@
         #recordsTable tr:hover {
             background-color: #ecfdf5; /* verde muy claro al pasar el ratón */
         }
+        /* Estilo para el Canvas de la firma */
+        .signature-canvas {
+            cursor: crosshair;
+            background-color: #fff;
+            touch-action: none; /* Prevenir el desplazamiento en móviles al firmar */
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -104,7 +110,7 @@
                     </select>
                 </div>
 
-                <!-- CAMPO NUEVO: PERIODO ACADÉMICO -->
+                <!-- CAMPO PERIODO ACADÉMICO -->
                 <div class="grid-item p-3">
                     <label for="academicPeriod" class="input-label block">Periodo Académico</label>
                     <select id="academicPeriod" name="academicPeriod" class="input-field w-full">
@@ -138,7 +144,7 @@
                 
             </div>
             
-            <!-- SECCIÓN 2: DATOS DE LA OBSERVACIÓN (NUEVOS CAMPOS) -->
+            <!-- SECCIÓN 2: DATOS DE LA OBSERVACIÓN -->
             <h2 class="text-xl font-bold text-blue-800 border-b-2 border-blue-200 pb-1 pt-6 mb-4">2. Datos de la Observación</h2>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-y-4 gap-x-4">
@@ -174,7 +180,7 @@
                     <label for="registeringPersonName" class="input-label block">Nombre y Cargo del Responsable del Registro</label>
                     <input type="text" id="registeringPersonName" name="registeringPersonName" class="input-field w-full" placeholder="Ej: Lic. Ana Torres - Docente de 3°">
                 </div>
-                <!-- Campo de Acudiente - Opcional para este registro, pero útil para contacto -->
+                <!-- Campo de Acudiente -->
                 <div class="grid-item p-3">
                     <label for="parentContacted" class="input-label block">Acudiente Contactado (SÍ/NO)</label>
                     <select id="parentContacted" name="parentContacted" class="input-field w-full">
@@ -200,7 +206,39 @@
                         <textarea id="mediationActions" name="mediationActions" rows="5" class="input-field w-full" placeholder="Ej: Diálogo con el estudiante, remisión a coordinación, felicitación pública."></textarea>
                     </div>
                 </div>
+            </div>
 
+            <!-- SECCIÓN 3: FIRMAS DIGITALES -->
+            <h2 class="text-xl font-bold text-blue-800 border-b-2 border-blue-200 pb-1 pt-6 mb-4">3. Firmas Digitales</h2>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- FIRMA DEL RESPONSABLE (Registrador) -->
+                <div class="grid-item p-3 border rounded-xl bg-gray-50">
+                    <label class="input-label block mb-2 text-lg">Firma del Responsable del Registro</label>
+                    <canvas id="registradorSignatureCanvas" class="signature-canvas border border-gray-300 w-full rounded-md shadow-inner" width="400" height="120"></canvas>
+                    <div class="mt-3 flex items-center justify-between">
+                        <button type="button" onclick="clearRegistradorSignature()" class="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 focus:outline-none focus:ring-4 focus:ring-red-300 transition duration-150 ease-in-out text-sm">
+                            ❌ Limpiar
+                        </button>
+                        <p id="registradorSignatureStatus" class="text-sm text-gray-500 italic">Dibuja aquí.</p>
+                    </div>
+                    <!-- Campo oculto para guardar la data de la firma Base64 del Registrador -->
+                    <input type="hidden" id="registradorSignatureData" name="registradorSignatureData">
+                </div>
+                
+                <!-- FIRMA DEL ESTUDIANTE -->
+                <div class="grid-item p-3 border rounded-xl bg-gray-50">
+                    <label class="input-label block mb-2 text-lg">Firma del Estudiante (Si aplica)</label>
+                    <canvas id="studentSignatureCanvas" class="signature-canvas border border-gray-300 w-full rounded-md shadow-inner" width="400" height="120"></canvas>
+                    <div class="mt-3 flex items-center justify-between">
+                        <button type="button" onclick="clearStudentSignature()" class="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 focus:outline-none focus:ring-4 focus:ring-red-300 transition duration-150 ease-in-out text-sm">
+                            ❌ Limpiar
+                        </button>
+                        <p id="studentSignatureStatus" class="text-sm text-gray-500 italic">Dibuja aquí.</p>
+                    </div>
+                    <!-- Campo oculto para guardar la data de la firma Base64 del Estudiante -->
+                    <input type="hidden" id="studentSignatureData" name="studentSignatureData">
+                </div>
             </div>
 
             <!-- Botones de Acción -->
@@ -231,9 +269,152 @@
 
     <script>
         let savedRecords = []; // Array para almacenar los registros
-        const STORAGE_KEY = 'observador_registro_data_v1'; // Nueva clave para este formulario
+        const STORAGE_KEY = 'observador_registro_data_v1';
+        
+        // Variables globales para cada firma
+        let registradorCanvas, registradorCtx;
+        let studentCanvas, studentCtx;
+        let registradorSignatureDataInput, studentSignatureDataInput;
 
-        document.addEventListener('DOMContentLoaded', loadRecords);
+        // Utilizamos objetos para pasar el estado de dibujo por referencia
+        const registradorIsDrawingRef = { value: false };
+        const studentIsDrawingRef = { value: false };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRecords();
+            initSignatures(); // Inicializa ambos canvas
+            window.addEventListener('resize', initSignatures);
+        });
+        
+        // --- Funciones Genéricas de Firma Digital ---
+
+        function getMousePos(e, canvas) {
+            const rect = canvas.getBoundingClientRect();
+            // Manejar touch events
+            const clientX = e.clientX === undefined && e.targetTouches ? e.targetTouches[0].clientX : e.clientX;
+            const clientY = e.clientY === undefined && e.targetTouches ? e.targetTouches[0].clientY : e.clientY;
+            
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+        
+        function startDrawing(e, ctx, isDrawingRef, statusId) {
+            isDrawingRef.value = true;
+            const pos = getMousePos(e, ctx.canvas);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+            document.getElementById(statusId).textContent = 'Dibujando...';
+        }
+
+        function draw(e, ctx, isDrawingRef) {
+            if (!isDrawingRef.value) return;
+            const pos = getMousePos(e, ctx.canvas);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+        }
+
+        function stopDrawing(isDrawingRef, saveFn, statusId) {
+            if (isDrawingRef.value) {
+                isDrawingRef.value = false;
+                saveFn();
+                document.getElementById(statusId).textContent = 'Firma capturada. ¡Recuerda Guardar el registro!';
+            }
+        }
+
+        function saveSignatureToInput(canvas, input) {
+            // Convertir canvas content a Base64 image data (PNG)
+            const dataURL = canvas.toDataURL('image/png');
+            input.value = dataURL;
+        }
+
+        function clearCanvas(ctx, canvas, input, statusId) {
+            if (!ctx || !canvas) return;
+            // Limpia con fondo blanco
+            ctx.fillRect(0, 0, canvas.width, canvas.height); 
+            input.value = '';
+            document.getElementById(statusId).textContent = 'Firma borrada.';
+        }
+
+        // --- Configuración e Inicialización de Canvas ---
+
+        function initSignatureCanvas(canvasId, inputId, statusId, isDrawingRef) {
+            const canvas = document.getElementById(canvasId);
+            const input = document.getElementById(inputId);
+            if (!canvas || !input) return null;
+
+            const ctx = canvas.getContext('2d');
+            
+            // Hacer el canvas responsivo
+            const containerWidth = canvas.parentElement.clientWidth;
+            canvas.width = containerWidth - 6; 
+            canvas.height = 120; 
+
+            // Configuración de dibujo
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = 'black';
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height); 
+            
+            // Cargar data previa
+            if (input.value) {
+                const img = new Image();
+                img.onload = function() { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); };
+                img.src = input.value;
+                document.getElementById(statusId).textContent = 'Firma cargada.';
+            } else {
+                document.getElementById(statusId).textContent = 'Dibuja aquí.';
+            }
+
+            // Bind listeners
+            const saveFn = () => saveSignatureToInput(canvas, input);
+
+            // Funciones de manejo de eventos que llaman a las funciones genéricas
+            const handleStart = (e) => startDrawing(e, ctx, isDrawingRef, statusId);
+            const handleMove = (e) => draw(e, ctx, isDrawingRef);
+            const handleEnd = () => stopDrawing(isDrawingRef, saveFn, statusId);
+
+            // Eventos de Mouse
+            canvas.onmousedown = handleStart;
+            canvas.onmousemove = handleMove;
+            canvas.onmouseup = handleEnd;
+            canvas.onmouseout = handleEnd;
+
+            // Eventos de Touch
+            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleStart(e); }, false);
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, false);
+            canvas.addEventListener('touchend', handleEnd, false);
+            
+            return { canvas, ctx, input };
+        }
+
+        function initSignatures() {
+            // Inicializar Registrador
+            const registradorRef = initSignatureCanvas('registradorSignatureCanvas', 'registradorSignatureData', 'registradorSignatureStatus', registradorIsDrawingRef);
+            if (registradorRef) {
+                registradorCanvas = registradorRef.canvas;
+                registradorCtx = registradorRef.ctx;
+                registradorSignatureDataInput = registradorRef.input;
+            }
+
+            // Inicializar Estudiante
+            const studentRef = initSignatureCanvas('studentSignatureCanvas', 'studentSignatureData', 'studentSignatureStatus', studentIsDrawingRef);
+            if (studentRef) {
+                studentCanvas = studentRef.canvas;
+                studentCtx = studentRef.ctx;
+                studentSignatureDataInput = studentRef.input;
+            }
+        }
+        
+        // Funciones de limpieza llamadas desde el HTML
+        function clearRegistradorSignature() { 
+            clearCanvas(registradorCtx, registradorCanvas, registradorSignatureDataInput, 'registradorSignatureStatus');
+        }
+        function clearStudentSignature() { 
+            clearCanvas(studentCtx, studentCanvas, studentSignatureDataInput, 'studentSignatureStatus'); 
+        }
 
         // --- Funciones de Gestión de Datos ---
 
@@ -267,7 +448,6 @@
 
             // Validación mínima: Nombre del Estudiante y Fecha de Registro
             if (!data.studentName || !data.recordDate || !data.reportType) {
-                // Usamos un modal o un mensaje en lugar de alert()
                 const requiredFields = [];
                 if (!data.studentName) requiredFields.push('Nombre del Estudiante');
                 if (!data.recordDate) requiredFields.push('Fecha del Registro');
@@ -277,6 +457,10 @@
                 displayMessageModal('Atención', '<p>' + message + '</p>', 'bg-red-500');
                 return null; 
             }
+            
+            // Asegurar que las firmas se guardan ANTES de obtener los datos
+            saveSignatureToInput(registradorCanvas, registradorSignatureDataInput);
+            saveSignatureToInput(studentCanvas, studentSignatureDataInput);
 
             data.id = Date.now(); // ID único
             return data;
@@ -284,6 +468,8 @@
 
         function clearForm() {
             document.getElementById('dataSheetForm').reset();
+            clearRegistradorSignature(); 
+            clearStudentSignature();
         }
 
         // Función para mostrar un mensaje/detalles (reemplazando alert())
@@ -292,24 +478,21 @@
             if (!modal) {
                 modal = document.createElement('div');
                 modal.id = 'customModal';
-                // Añadir clases para ocultar y centrar
                 modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300 opacity-0 pointer-events-none';
                 document.body.appendChild(modal);
             }
 
-            // El modal ahora usa contentHTML para el cuerpo
             modal.innerHTML = `
                 <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 transform transition-all duration-300 scale-90">
                     <div class="flex items-center space-x-4 mb-4 border-b pb-2">
                         <h3 class="text-xl font-bold text-gray-800">${title}</h3>
                     </div>
-                    <!-- Contenido del modal (puede ser texto simple o HTML estructurado) -->
+                    <!-- Contenido del modal -->
                     <div class="text-gray-600 mb-6 max-h-96 overflow-y-auto">${contentHTML}</div>
                     <button onclick="closeModal()" class="w-full ${bgColor.replace('bg-', 'hover:bg-')} ${bgColor} text-white font-semibold py-2 rounded-lg">Cerrar</button>
                 </div>
             `;
             
-            // Mostrar modal
             setTimeout(() => {
                 modal.classList.remove('opacity-0', 'pointer-events-none');
                 modal.querySelector('div').classList.remove('scale-90');
@@ -321,9 +504,7 @@
             if (modal) {
                 modal.querySelector('div').classList.add('scale-90');
                 modal.classList.add('opacity-0', 'pointer-events-none');
-                setTimeout(() => {
-                    // Limpieza opcional
-                }, 300);
+                setTimeout(() => {}, 300);
             }
         }
         
@@ -332,7 +513,7 @@
         function saveRecord() {
             const data = getFormData();
             if (data) {
-                savedRecords.unshift(data); // Agregar al principio
+                savedRecords.unshift(data); 
                 saveRecords();
                 clearForm();
                 renderRecords();
@@ -348,6 +529,16 @@
                 displayMessageModal('Error', '<p>Registro no encontrado.</p>', 'bg-red-500');
                 return;
             }
+
+            const getSignatureHTML = (data, title) => {
+                return data && data.length > 50
+                ? `<div class="mt-4"><h4 class="font-bold text-gray-800">${title}</h4><img src="${data}" alt="${title}" class="w-full h-auto border border-gray-300 rounded-md p-1 bg-white"/></div>` 
+                : `<p class="text-sm text-red-500 mt-4">${title}: No registrada.</p>`;
+            };
+
+            const registradorSignatureHTML = getSignatureHTML(record.registradorSignatureData, 'Firma del Responsable');
+            const studentSignatureHTML = getSignatureHTML(record.studentSignatureData, 'Firma del Estudiante');
+
 
             // Convertir el objeto de registro en contenido HTML estructurado
             const detailsHTML = `
@@ -379,13 +570,19 @@
                     <p class="text-sm"><strong>Rol:</strong> ${record.registeringPersonRole || '-'}</p>
                     <p class="text-sm"><strong>Nombre:</strong> ${record.registeringPersonName || '-'}</p>
                     <p class="text-sm"><strong>Acudiente Contactado:</strong> ${record.parentContacted || 'No'}</p>
+                    
+                    <!-- FIRMAS DIGITALES -->
+                    <div class="border-t pt-3 mt-4 flex flex-col md:flex-row gap-4">
+                        <div class="md:w-1/2">${registradorSignatureHTML}</div>
+                        <div class="md:w-1/2">${studentSignatureHTML}</div>
+                    </div>
                 </div>
             `;
 
             displayMessageModal('Detalles del Registro', detailsHTML, 'bg-blue-600'); 
         }
 
-        // --- Funciones de Renderización ---
+        // --- Funciones de Renderización y Eliminación ---
 
         function renderRecords() {
             const container = document.getElementById('recordsListContainer');
@@ -468,7 +665,7 @@
                 'studentName', 
                 'studentGrade', 
                 'studentGroup', 
-                'academicPeriod', // <-- Nuevo campo para exportación
+                'academicPeriod', 
                 'studentCampus', 
                 'studentShift', 
                 'motiveDescription', 
@@ -476,6 +673,8 @@
                 'registeringPersonRole',
                 'registeringPersonName',
                 'parentContacted',
+                'registradorSignatureData', // <-- Actualizado
+                'studentSignatureData',     // <-- Nuevo campo
                 'id'
             ];
 
@@ -487,7 +686,7 @@
                     case 'studentName': return 'Estudiante';
                     case 'studentGrade': return 'Grado';
                     case 'studentGroup': return 'Grupo';
-                    case 'academicPeriod': return 'Periodo Académico'; // <-- Nuevo encabezado
+                    case 'academicPeriod': return 'Periodo Académico'; 
                     case 'studentCampus': return 'Sede';
                     case 'studentShift': return 'Jornada';
                     case 'motiveDescription': return 'Motivo/Descripcion';
@@ -495,6 +694,8 @@
                     case 'registeringPersonRole': return 'Rol del Registrador';
                     case 'registeringPersonName': return 'Nombre del Registrador';
                     case 'parentContacted': return 'Acudiente Contactado';
+                    case 'registradorSignatureData': return 'Firma Responsable (Base64)'; // <-- Actualizado
+                    case 'studentSignatureData': return 'Firma Estudiante (Base64)'; // <-- Nuevo
                     case 'id': return 'ID Interno';
                     default: return key;
                 }
